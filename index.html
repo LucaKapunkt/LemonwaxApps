@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Lustiger Koch - FP Testat</title>
+    <style>
+        #spielfeld {
+            width: 1000px;
+            height: 600px;
+            background-color: #e6e5e5;
+            border: 1px solid #000000;
+            position: relative;
+        }
+
+        body {
+            display: flex;
+            font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif
+        }
+
+        #scoreboard {
+            width: 400px;
+            height: 600px;
+            background-color: #cbcbcb;
+            border: 1px solid #000000;
+            margin-left: 30px;
+            padding: 10px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #scoreboard h1 {
+            text-align: center;
+            margin: 20px 0px 50px 0px;
+        }
+
+        #scoreboard p:not(#score) {
+            font-size: 22px;
+            margin: 20px 0px 20px 20px;
+        }
+
+        #leben {
+            margin-bottom: 80px !important;
+        }
+
+        #hertz {
+            font-size: 14px;
+            margin-left: 200px;
+        }
+
+        #score {
+            font-size: 30px;
+            margin-top: auto;
+            margin-bottom: 40px;
+            margin-left: 20px;
+        }
+
+
+        #koch {
+            width: 50px;
+            height: 100px;
+            background-color: #00f;
+            position: absolute;
+            bottom: 0;
+            left: 475px;
+        }
+
+        .zutat {
+            width: 30px;
+            height: 30px;
+            background-color: #f00;
+            position: absolute;
+        }
+
+        .ascending {
+            background-color: #ff9966;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="spielfeld">
+        <div id="koch"></div>
+        <div class="zutat" id="zutat0"></div>
+        <div class="zutat" id="zutat1"></div>
+        <div class="zutat" id="zutat2"></div>
+        <div class="zutat" id="zutat3"></div>
+    </div>
+
+    <div id="scoreboard">
+        <h1>Scoreboard</h1>
+        <p id="leben">Leben: 3</p>
+        <p id="level">Level: 1 <span id="hertz">Hz</span></p>
+        <p id="punktzahl">Punktzahl: 0</p>
+        <p id="score">Score: 0</p>
+    </div>
+
+    <script>
+        // Spalten
+        const Bahn = {
+            bahn0: 150,
+            bahn1: 350,
+            bahn2: 550,
+            bahn3: 750
+        };
+
+        // Höhenpositionen (Stages)
+        const stages = {
+            stage0: 0, // Boden
+            stage1: 100,
+            stage2: 200,
+            stage3: 300,
+            stage4: 400,
+            stage5: 500
+        };
+
+        // Initiale Position des Kochs
+        let currentBahnIndex = 1;
+
+        // Takt in Millisekunden
+        let takt = 630;
+
+        // Variable, um das Intervall zu speichern
+        let intervalId;
+
+        let leben = 3;
+        let level = 1;
+        let punktzahl = 0;
+        let score = 0;
+
+
+        // Funktion zum Aktualisieren des Scoreboards
+        function updateScoreboard() {
+            document.getElementById('leben').innerText = 'Leben: ' + leben;
+            document.getElementById('level').innerText = 'Level: ' + level;
+            document.getElementById('level').innerHTML = 'Level: ' + level + ' <span id="hertz">' + (1000 / takt).toFixed(2) + ' Hz</span>';
+            document.getElementById('punktzahl').innerText = 'Punktzahl: ' + punktzahl;
+            document.getElementById('score').innerText = 'Score: ' + score;
+        }
+
+        // Arrays für Zutaten Infos
+        let zutatStages = [1, 1, 1, 1]; //Default Werte
+        let zutatZielStages = [5, 5, 5, 5]; //Default Werte
+        let zutatAscending = [false, false, false, false];
+
+        // Variable, um die aktuelle Zutat zu verfolgen
+        let currentZutatIndex = 0;
+
+        // Funktion zum Setzen der Position des Kochs 
+        function setKochPosition(index) {
+            const koch = document.getElementById('koch');
+            koch.style.left = Bahn['bahn' + index] + 'px';
+        }
+
+        // Funktionsaufruf mit der richtigen Zutat
+        function moveZutaten() {
+            const zutatIndex = currentZutatIndex;
+            const zutatId = 'zutat' + zutatIndex;
+
+            if (zutatAscending[zutatIndex]) {
+                zutatStages[zutatIndex] = moveZutatUp(zutatId, zutatStages[zutatIndex], zutatZielStages[zutatIndex]);
+            } else {
+                zutatStages[zutatIndex] = moveZutatDown(zutatId, zutatStages[zutatIndex]);
+            }
+
+            currentZutatIndex = (currentZutatIndex + 1) % 4;
+
+            updateScoreboard();
+        }
+
+        function moveZutatDown(id, currentStage) {
+            const zutat = document.getElementById(id);
+            const zutatBahnIndex = parseInt(id.replace('zutat', ''));
+
+            if (currentStage > 1) {
+                currentStage--;
+                zutat.style.bottom = stages['stage' + currentStage] + 'px';
+            } else if (currentStage === 1) {
+                if (currentBahnIndex === zutatBahnIndex) {
+                    // Zutat fängt an, nach oben zu gehen
+                    zutatAscending[zutatBahnIndex] = true;
+                    zutatZielStages[zutatBahnIndex] = getRandomStage(); // Neue Ziel-Stage setzen
+                    currentStage++;
+                    zutat.style.bottom = stages['stage' + currentStage] + 'px';
+                    zutat.classList.add('ascending');
+
+                    punktzahl++;
+                    score += 50 * level;
+
+                    if (punktzahl % 10 === 0) { // Level erhöhen nach 10 Punkten
+                        level++;
+                        takt = Math.max(150, takt - 120);
+                        updateInterval(); // Aktualisiere das Intervall mit dem neuen Takt
+                    }
+
+                } else {
+                    currentStage--;
+                    zutat.style.bottom = stages['stage' + currentStage] + 'px';
+                    if (currentStage === 0) {
+                        leben--;
+                        stopGame();
+                        if (leben > 0) {
+                            setTimeout(() => {
+                                resetRunde();
+                                setTimeout(() => {
+                                    startGame();
+                                }, 1000); // 1 weitere Sekunde warten vor dem Starten
+                            }, 3500);
+                        } else {
+                            setTimeout(() => {
+                                alert("Spiel vorbei! Keine Leben mehr übrig.");
+                            }, 500);
+                        }
+                    }
+                }
+            }
+            return currentStage;
+        }
+
+        function moveZutatUp(id, currentStage, zielStage) {
+            const zutat = document.getElementById(id);
+            const zutatBahnIndex = parseInt(id.replace('zutat', ''));
+            if (currentStage < zielStage) {
+                currentStage++;
+                zutat.style.bottom = stages['stage' + currentStage] + 'px';
+            } else {
+                zutatAscending[zutatBahnIndex] = false; // Zutat hat die Ziel-Stage erreicht und beginnt wieder zu fallen
+                zutat.classList.remove('ascending');
+                currentStage--; // Direkt die erste Stage des Fallens setzen
+                zutat.style.bottom = stages['stage' + currentStage] + 'px';
+            }
+            return currentStage;
+        }
+
+        // Funktion zum Setzen der initialen Positionen der Zutaten
+        function setInitialZutatPositions() {
+            for (let i = 0; i < 4; i++) {
+                const zutat = document.getElementById('zutat' + i);
+                zutatStages[i] = getRandomStage(); // Zufallswerte für jede Zutat generieren
+                zutat.style.left = Bahn['bahn' + i] + 'px';
+                zutat.style.bottom = stages['stage' + zutatStages[i]] + 'px';
+            }
+        }
+
+        // Funktion zum Starten des Spiels
+        function startGame() {
+            if (!intervalId) {
+                intervalId = setInterval(moveZutaten, takt);
+            }
+        }
+
+        // Funktion zum Stoppen des Spiels
+        function stopGame() {
+            clearInterval(intervalId);
+            intervalId = null;
+        }
+
+        function resetGame() {
+            score = 0;
+            leben = 3;
+            currentBahnIndex = 1;
+            resetRunde();
+        }
+
+        function resetRunde() {
+            level = 1;
+            punktzahl = 0;
+            takt = 630;
+            currentZutatIndex = 0;
+            resetAscending();
+            setInitialZutatPositions();
+            updateScoreboard();
+        }
+
+        function resetAscending() {
+            zutatAscending.fill(false);
+            const zutaten = document.querySelectorAll('.zutat');
+            zutaten.forEach(zutat => zutat.classList.remove('ascending'));
+        }
+
+        function updateInterval() {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+            intervalId = setInterval(moveZutaten, takt);
+        }
+
+        // Funktion zur Generierung einer zufälligen Stage zwischen 2 und 5
+        function getRandomStage() {
+            return Math.floor(Math.random() * 4) + 2;
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'ArrowLeft') {
+                currentBahnIndex = Math.max(0, currentBahnIndex - 1);
+            } else if (event.key === 'ArrowRight') {
+                currentBahnIndex = Math.min(3, currentBahnIndex + 1);
+            } else if (event.key === ' ') { // Leertaste zum Starten des Spiels
+                resetGame();
+                setTimeout(startGame, 1000);
+            } else if (event.key === 'y' || event.key === 'Y') { // 'Y' zum Setzen des Kochs auf Bahn0
+                currentBahnIndex = 0;
+            }
+
+            setKochPosition(currentBahnIndex);
+        });
+
+        window.onload = function () {
+            setKochPosition(currentBahnIndex);
+            updateScoreboard();
+        };
+    </script>
+</body>
+
+</html>
